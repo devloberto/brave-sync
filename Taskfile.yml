@@ -31,6 +31,7 @@ tasks:
     env:
       DOCKER_DEFAULT_PLATFORM: '{{.PLATFORM}}'
     cmds:
+      - sed -i 's/sleep 15/sleep 60/' go-sync/dynamo.Dockerfile
       - docker compose -f go-sync/docker-compose.yml --progress=plain build web dynamo-local
       - docker tag go-sync-web brave-sync-web
       - docker tag go-sync-dynamo-local brave-sync-dynamo
