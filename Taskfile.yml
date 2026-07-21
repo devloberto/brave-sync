@@ -1,0 +1,26 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+
+version: '3'
+
+tasks:
+  default:
+    desc: Print a greeting message
+    cmds:
+      - echo
+      - echo "###############################"
+      - echo "# Brave Sync Server          -#"
+      - echo "#                            -#"
+      - echo "# build needed docker images -#"
+      - echo "###############################"
+      - echo
+      - task --list
+    silent: true
+
+  build:
+    desc: Build the brave sync server docker images
+    cmds:
+      - '[ -d go-sync ] || git clone https://github.com/brave/go-sync'
+      - docker compose -f go-sync/docker-compose.yml build web dynamo-local
+      - docker tag go-sync-web brave-sync-web
+      - docker tag go-sync-dynamo-local brave-sync-dynamo
+      - docker image rm go-sync-web go-sync-dynamo-local
