@@ -1,11 +1,19 @@
 services:
-  web:
-    image: ghcr.io/devloberto/brave-sync-web:latest
+  caddy-reverse-proxy:
+    image: caddy/caddy:2.11.4-alpine
     ports:
       - "8295:8295"
+    networks:
+      - brave-sync
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
     depends_on:
-      - dynamo
-      - redis
+      - web
+  web:
+    image: ghcr.io/devloberto/brave-sync-web:latest
+    # caddy takes care of in- and outbound traffic
+    # ports:
+    #  - "8295:8295"
     networks:
       - brave-sync
     environment:

@@ -1,0 +1,6 @@
+:8295 {
+	@command path /command /command/*
+	rewrite @command /v2{path}
+
+	reverse_proxy web:8295
+}

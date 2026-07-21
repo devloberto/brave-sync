@@ -41,9 +41,22 @@ is to use the [compose.yml](./compose.yml) that I use for development
 purpose and which is based on the `docker-compose.yml` from
 the [brave/go-sync](https://github.com/brave/go-sync) repository.
 
-Once the server is running, point your browser at it by visiting
-[brave://flags/#brave-override-sync-server-url](brave://flags/#brave-override-sync-server-url),
-enabling the flag, and entering your server's URL.
+Once the server is running, point Brave at it. The current go-sync server
+only exposes the v2 sync API at `/v2/command/`, so the legacy
+`brave://flags/#brave-override-sync-server-url` flag will **not** work
+(requests to `/command/` will return 404). That flag also strips any
+path suffix, so the workaround is to set the bare host URL and let the
+included [Caddy](./Caddyfile) reverse proxy rewrite `/command/` to
+`/v2/command/` for you.
+
+Visit [brave://flags/#brave-override-sync-server-url](brave://flags/#brave-override-sync-server-url),
+enable the flag, and enter your server's base URL (no path):
+
+```
+http://<your-host>:8295
+```
+
+And do not forget to enable Sync at [brave://settings/braveSync](brave://settings/braveSync).
 
 ### Verify sync status
 
