@@ -29,4 +29,17 @@ see [`.github/workflows/docker-publish.yml`](.github/workflows/docker-publish.ym
 
 ## use the self-hosted sync server
 
-Go to brave://flags/#brave-override-sync-server-url and enter your URL.
+Pull the two published images:
+
+```sh
+docker pull ghcr.io/devloberto/brave-sync-web:latest
+docker pull ghcr.io/devloberto/brave-sync-dynamo:latest
+```
+
+Then start them together — the simplest way is to reuse the
+`docker-compose.yml` from [brave/go-sync](https://github.com/brave/go-sync),
+pointing its `web` and `dynamo-local` services at the images above.
+
+Once the server is running, point your browser at it by visiting
+[brave://flags/#brave-override-sync-server-url](brave://flags/#brave-override-sync-server-url),
+enabling the flag, and entering your server's URL.
