@@ -2,6 +2,9 @@
 
 version: '3'
 
+vars:
+  PLATFORM: '{{.PLATFORM | default "linux/amd64"}}'
+
 tasks:
   default:
     desc: Print a greeting message
@@ -23,28 +26,12 @@ tasks:
     silent: true
 
   build:
-    desc: Build the brave sync server docker images
+    desc: Build the brave sync server docker images (set PLATFORM=linux/amd64|linux/arm64)
     deps: [clone]
+    env:
+      DOCKER_DEFAULT_PLATFORM: '{{.PLATFORM}}'
     cmds:
-      - docker compose -f go-sync/docker-compose.yml build web dynamo-local
-      - docker tag go-sync-web brave-sync-web
-      - docker tag go-sync-dynamo-local brave-sync-dynamo
-      - docker image rm go-sync-web go-sync-dynamo-local
-
-  build-amd64:
-    desc: Build the brave sync server docker images for linux/amd64
-    deps: [clone]
-    cmds:
-      - docker compose -f go-sync/docker-compose.yml --progress=plain build --platform linux/amd64 web dynamo-local
-      - docker tag go-sync-web brave-sync-web
-      - docker tag go-sync-dynamo-local brave-sync-dynamo
-      - docker image rm go-sync-web go-sync-dynamo-local
-
-  build-arm64:
-    desc: Build the brave sync server docker images for linux/arm64
-    deps: [clone]
-    cmds:
-      - docker compose -f go-sync/docker-compose.yml --progress=plain build --platform linux/arm64 web dynamo-local
+      - docker compose -f go-sync/docker-compose.yml --progress=plain build web dynamo-local
       - docker tag go-sync-web brave-sync-web
       - docker tag go-sync-dynamo-local brave-sync-dynamo
       - docker image rm go-sync-web go-sync-dynamo-local
