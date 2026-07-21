@@ -24,3 +24,21 @@ tasks:
       - docker tag go-sync-web brave-sync-web
       - docker tag go-sync-dynamo-local brave-sync-dynamo
       - docker image rm go-sync-web go-sync-dynamo-local
+
+  build-amd64:
+    desc: Build the brave sync server docker images for linux/amd64
+    cmds:
+      - '[ -d go-sync ] || git clone https://github.com/brave/go-sync'
+      - docker compose -f go-sync/docker-compose.yml --progress=plain build --platform linux/amd64 web dynamo-local
+      - docker tag go-sync-web brave-sync-web
+      - docker tag go-sync-dynamo-local brave-sync-dynamo
+      - docker image rm go-sync-web go-sync-dynamo-local
+
+  build-arm64:
+    desc: Build the brave sync server docker images for linux/arm64
+    cmds:
+      - '[ -d go-sync ] || git clone https://github.com/brave/go-sync'
+      - docker compose -f go-sync/docker-compose.yml --progress=plain build --platform linux/arm64 web dynamo-local
+      - docker tag go-sync-web brave-sync-web
+      - docker tag go-sync-dynamo-local brave-sync-dynamo
+      - docker image rm go-sync-web go-sync-dynamo-local

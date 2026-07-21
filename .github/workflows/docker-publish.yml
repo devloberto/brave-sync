@@ -5,7 +5,6 @@ on:
     - cron: '45 17 * * 1'
   push:
     branches: [ "master" ]
-    # Publish semver tags as releases.
     tags: [ 'v*.*.*' ]
   pull_request:
     branches: [ "master" ]
@@ -16,7 +15,77 @@ env:
 
 jobs:
   build:
+    name: build (${{ matrix.arch }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            task: build-amd64
+          - arch: arm64
+            task: build-arm64
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
 
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@4cb4894813da04c5c191e705fdc8b89e6b7b65ed # v3.0.0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f95db51fddba0c2d1ec667646a06c2ce06100226 # v3.0.0
+        with:
+          driver-opts: image=moby/buildkit:latest
+
+      - name: Log into registry ${{ env.REGISTRY }}
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d # v3.0.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install Task
+        uses: arduino/setup-task@v2
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@96383f45573cb7f253c731d3b3ab81c87ef81934 # v5.0.0
+        with:
+          images: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-web
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-dynamo
+          tags: |
+            type=raw,value=${{ matrix.arch }}
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=semver,pattern={{version}}
+
+      - name: Build images
+        run: task ${{ matrix.task }}
+
+      - name: Tag images
+        run: |
+          docker tag brave-sync-web   ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-web:${{ matrix.arch }}
+          docker tag brave-sync-dynamo ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-dynamo:${{ matrix.arch }}
+
+      - name: Push images
+        if: github.event_name != 'pull_request'
+        run: |
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-web:${{ matrix.arch }}
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-dynamo:${{ matrix.arch }}
+
+  manifest:
+    name: manifest
+    needs: build
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -27,22 +96,20 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install cosign
-        if: github.event_name != 'pull_request'
-        uses: sigstore/cosign-installer@59acb6260d9c0ba8f4a2f9d9b48431a222b68e20 #v3.5.0
-        with:
-          cosign-release: 'v2.2.4'
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f95db51fddba0c2d1ec667646a06c2ce06100226 # v3.0.0
 
       - name: Log into registry ${{ env.REGISTRY }}
-        if: github.event_name != 'pull_request'
         uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d # v3.0.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@59acb6260d9c0ba8f4a2f9d9b48431a222b68e20 #v3.5.0
+        with:
+          cosign-release: 'v2.2.4'
 
       - name: Extract Docker metadata
         id: meta
@@ -51,45 +118,33 @@ jobs:
           images: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-web
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-dynamo
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=semver,pattern={{version}}
 
-      - name: Install Task
-        uses: arduino/setup-task@v2
-        with:
-          version: 3.x
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build images
-        run: task build
-
-      - name: Tag images
+      - name: Create and push manifests
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
         run: |
-          docker tag brave-sync-web   ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-web
-          docker tag brave-sync-dynamo ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-dynamo
-
-      - name: Push images
-        if: github.event_name != 'pull_request'
-        id: push
-        run: |
-          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-web
-          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-dynamo
-          DIGEST_WEB=$(
-            docker inspect --format='{{index .RepoDigests 0}}' \
-              ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-web \
-            | cut -d'@' -f2
-          )
-          DIGEST_DYNAMO=$(
-            docker inspect --format='{{index .RepoDigests 0}}' \
-              ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-dynamo \
-            | cut -d'@' -f2
-          )
-          echo "digest_web=${DIGEST_WEB}"   >> "$GITHUB_OUTPUT"
-          echo "digest_dynamo=${DIGEST_DYNAMO}" >> "$GITHUB_OUTPUT"
+          echo "${TAGS}" | tr ' ' '\n' | while read -r tag; do
+            [ -z "$tag" ] && continue
+            docker buildx imagetools create \
+              -t "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-web:${tag}" \
+              "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-web:amd64" \
+              "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-web:arm64"
+            docker buildx imagetools create \
+              -t "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-dynamo:${tag}" \
+              "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-dynamo:amd64" \
+              "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-dynamo:arm64"
+          done
 
       - name: Sign the published Docker images
-        if: github.event_name != 'pull_request'
         env:
-          DIGEST_WEB: ${{ steps.push.outputs.digest_web }}
-          DIGEST_DYNAMO: ${{ steps.push.outputs.digest_dynamo }}
+          TAGS_WEB: ${{ steps.meta.outputs.tags }}
+          TAGS_DYNAMO: ${{ steps.meta.outputs.tags }}
         run: |
-          cosign sign --yes ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-web@${DIGEST_WEB}
-          cosign sign --yes ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-dynamo@${DIGEST_DYNAMO}
+          echo "${TAGS_WEB}" | tr ' ' '\n' | while read -r tag; do
+            [ -z "$tag" ] && continue
+            cosign sign --yes "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-web:${tag}"
+            cosign sign --yes "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-dynamo:${tag}"
+          done
