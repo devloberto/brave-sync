@@ -27,14 +27,14 @@ services:
       - AWS_ENDPOINT=http://dynamo:8000
       - TABLE_NAME=client-entity-dev
       - REDIS_URL=redis:6379
-    volumes:
-      - "./mnt/dynamo:/db"
   dynamo:
     image: ghcr.io/devloberto/brave-sync-dynamo:latest
     ports:
       - "8000:8000"
     networks:
       - brave-sync
+    volumes:
+      - "./mnt/dynamo:/db"
   redis:
     image: redis:6.2.22-alpine3.21
     ports:
