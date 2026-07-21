@@ -126,25 +126,28 @@ jobs:
         env:
           TAGS: ${{ steps.meta.outputs.tags }}
         run: |
-          echo "${TAGS}" | tr ' ' '\n' | while read -r tag; do
-            [ -z "$tag" ] && continue
-            docker buildx imagetools create \
-              -t "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-web:${tag}" \
-              "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-web:amd64" \
-              "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-web:arm64"
-            docker buildx imagetools create \
-              -t "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-dynamo:${tag}" \
-              "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-dynamo:amd64" \
-              "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-dynamo:arm64"
+          set -euo pipefail
+          for image in web dynamo; do
+            for ref in ${TAGS}; do
+              [ -z "$ref" ] && continue
+              tag="${ref##*:}"
+              echo "Creating manifest for $image:${tag}"
+              docker buildx imagetools create \
+                -t "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-${image}:${tag}" \
+                "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-${image}:amd64" \
+                "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-${image}:arm64"
+            done
           done
 
       - name: Sign the published Docker images
         env:
-          TAGS_WEB: ${{ steps.meta.outputs.tags }}
-          TAGS_DYNAMO: ${{ steps.meta.outputs.tags }}
+          TAGS: ${{ steps.meta.outputs.tags }}
         run: |
-          echo "${TAGS_WEB}" | tr ' ' '\n' | while read -r tag; do
-            [ -z "$tag" ] && continue
-            cosign sign --yes "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-web:${tag}"
-            cosign sign --yes "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-dynamo:${tag}"
+          set -euo pipefail
+          for image in web dynamo; do
+            for ref in ${TAGS}; do
+              [ -z "$ref" ] && continue
+              tag="${ref##*:}"
+              cosign sign --yes "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-${image}:${tag}"
+            done
           done
