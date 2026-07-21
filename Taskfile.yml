@@ -40,3 +40,13 @@ tasks:
       - docker tag go-sync-web brave-sync-web
       - docker tag go-sync-dynamo-local brave-sync-dynamo
       - docker image rm go-sync-web go-sync-dynamo-local
+
+  dynamo-seed:
+    vars:
+      CONTAINER_NAME: 'brave-sync-dynamo-seed'
+    desc: Seed ./mnt/dynamo with the client-entity-dev table built into brave-sync-dynamo:latest
+    cmds:
+      - mkdir -p mnt/dynamo
+      - docker run --rm --detach --name {{.CONTAINER_NAME}} brave-sync-dynamo:latest tail -f /dev/null # sh -c 'tar cf - -C /db .' | tar xf - -C mnt/dynamo
+      - docker cp {{.CONTAINER_NAME}}:/db/shared-local-instance.db ./mnt/dynamo/
+      - docker stop {{.CONTAINER_NAME}}
